@@ -67,12 +67,17 @@ _on_error() {
     log_warn "Initiating rollback..."
     _perform_rollback
     log_error "Installation failed. Log: ${INSTALL_LOG}"
+    log_error "Run: cat ${INSTALL_LOG}  to see full details"
     exit "${code}"
 }
 
 _on_exit() {
     local code=$?
-    [[ "${code}" -eq 0 ]] && log_info "Install script exited normally."
+    if [[ "${code}" -eq 0 ]]; then
+        log_info "Install script exited normally."
+    fi
+    # Always flush log
+    sync 2>/dev/null || true
 }
 
 _perform_rollback() {
@@ -117,7 +122,7 @@ _preflight() {
     validate_os
     detect_architecture
     detect_virtualization
-    detect_network
+    detect_network || true   # non-fatal — fallback handled inside function
 }
 
 # ---------------------------------------------------------------------------

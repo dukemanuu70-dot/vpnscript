@@ -309,7 +309,7 @@ detect_network() {
     SERVER_IPV4=""
     SERVER_IPV6=""
 
-    # IPv4 detection — try multiple sources
+    # IPv4 detection — try multiple sources, never fatal
     local ipv4_sources=(
         "https://api4.ipify.org"
         "https://ipv4.icanhazip.com"
@@ -318,25 +318,25 @@ detect_network() {
         "https://ifconfig.me/ip"
     )
     for src in "${ipv4_sources[@]}"; do
-        local ip
+        local ip=""
         ip="$(curl -4 -s --connect-timeout 5 --max-time 8 "${src}" 2>/dev/null \
-              | tr -d '[:space:]')"
+              | tr -d '[:space:]')" || true
         if _is_valid_ipv4 "${ip}"; then
             SERVER_IPV4="${ip}"
             break
         fi
     done
 
-    # IPv6 detection — optional, not fatal
+    # IPv6 detection — optional, never fatal
     local ipv6_sources=(
         "https://api6.ipify.org"
         "https://ipv6.icanhazip.com"
         "https://v6.ident.me"
     )
     for src in "${ipv6_sources[@]}"; do
-        local ip
+        local ip=""
         ip="$(curl -6 -s --connect-timeout 5 --max-time 8 "${src}" 2>/dev/null \
-              | tr -d '[:space:]')"
+              | tr -d '[:space:]')" || true
         if [[ "${ip}" =~ : ]]; then
             SERVER_IPV6="${ip}"
             break
@@ -346,12 +346,13 @@ detect_network() {
     # Must have at least IPv4
     if [[ -z "${SERVER_IPV4}" ]]; then
         # Last resort: read from primary interface
-        SERVER_IPV4="$(get_local_ip)"
+        SERVER_IPV4="$(get_local_ip 2>/dev/null || true)"
         if [[ -z "${SERVER_IPV4}" ]]; then
-            log_fatal "Could not detect server IP. Check internet connectivity."
+            log_warn "Could not detect public IP. You can set it manually in /etc/vpn-manager/vpn.conf"
+            SERVER_IPV4="UNKNOWN"
+        else
+            log_warn "Using local interface IP: ${SERVER_IPV4} (may be a private/NAT address)"
         fi
-        log_warn "Could not reach IP detection services. Using local IP: ${SERVER_IPV4}"
-        log_warn "This may be a private/NAT address — VPN clients may not connect."
     fi
 
     log_ok "IPv4: ${SERVER_IPV4}"
