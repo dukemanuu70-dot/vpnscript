@@ -409,7 +409,8 @@ ssh_show_expiry() {
         if [[ "${expiry}" != "never" && -n "${expiry}" ]]; then
             local expiry_ts
             expiry_ts="$(date -d "${expiry}" +%s 2>/dev/null || echo 0)"
-            local diff=$(( (expiry_ts - today_ts) / 86400 ))
+            local diff
+            diff=$(( (expiry_ts - today_ts) / 86400 ))
             days_left="${diff}"
 
             if [[ "${diff}" -lt 0 ]]; then

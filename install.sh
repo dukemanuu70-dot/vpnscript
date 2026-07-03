@@ -390,7 +390,8 @@ _verify() {
 # Install summary
 # ---------------------------------------------------------------------------
 _print_summary() {
-    local elapsed=$(( $(date +%s) - INSTALL_START_TIME ))
+    local elapsed
+    elapsed=$(( $(date +%s) - INSTALL_START_TIME ))
     echo ""
     print_banner
     echo ""

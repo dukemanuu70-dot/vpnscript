@@ -113,7 +113,8 @@ _rotate_backups() {
     count="$(find "${BACKUP_BASE_DIR}" -name "*.tar.gz" | wc -l)"
 
     if [[ "${count}" -gt "${BACKUP_MAX_COUNT}" ]]; then
-        local to_delete=$(( count - BACKUP_MAX_COUNT ))
+        local to_delete
+        to_delete=$(( count - BACKUP_MAX_COUNT ))
         log_info "Rotating ${to_delete} old backup(s)..."
         find "${BACKUP_BASE_DIR}" -name "*.tar.gz" -printf "%T+ %p\n" | \
             sort | head -"${to_delete}" | awk '{print $2}' | xargs -r rm -f

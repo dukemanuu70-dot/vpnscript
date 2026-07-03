@@ -116,7 +116,8 @@ rotate_log() {
 
     local size_bytes
     size_bytes="$(stat -c%s "${log_file}" 2>/dev/null || echo 0)"
-    local size_mb=$(( size_bytes / 1048576 ))
+    local size_mb
+    size_mb=$(( size_bytes / 1048576 ))
 
     if [[ "${size_mb}" -ge "${max_size_mb}" ]]; then
         for (( i=max_files-1; i>=1; i-- )); do
