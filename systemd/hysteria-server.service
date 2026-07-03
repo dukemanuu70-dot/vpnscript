@@ -1,0 +1,16 @@
+[Unit]
+Description=Hysteria2 Server Service
+Documentation=https://hysteria.network
+After=network.target
+
+[Service]
+User=nobody
+ExecStart=/usr/local/bin/hysteria server --config /etc/hysteria/config.yaml
+Restart=always
+RestartSec=5s
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

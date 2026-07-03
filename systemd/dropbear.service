@@ -1,0 +1,25 @@
+[Unit]
+Description=Dropbear SSH Daemon
+Documentation=man:dropbear(8)
+After=network.target auditd.service
+
+[Service]
+EnvironmentFile=-/etc/default/dropbear
+ExecStartPre=/bin/mkdir -p /run/dropbear
+ExecStart=/usr/sbin/dropbear -F -E \
+    -p 444 \
+    -w \
+    -s \
+    -r /etc/dropbear/dropbear_ecdsa_host_key \
+    -r /etc/dropbear/dropbear_ed25519_host_key \
+    -r /etc/dropbear/dropbear_rsa_host_key
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=always
+RestartSec=5s
+Type=simple
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
