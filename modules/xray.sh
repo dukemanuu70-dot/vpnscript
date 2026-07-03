@@ -76,20 +76,25 @@ module_remove_xray() {
 }
 
 # ---------------------------------------------------------------------------
-# Install geodata
+# Install geodata — hosted in separate repos since Xray v1.8+
 # ---------------------------------------------------------------------------
 _install_xray_geodata() {
-    local version="${1:-}"
-    local base="https://github.com/XTLS/Xray-core/releases"
-    local tag="${version:-latest}"
-    if [[ "${tag}" != "latest" ]]; then
-        base="${base}/download/${tag}"
-    else
-        base="${base}/latest/download"
+    log_info "Downloading Xray geodata..."
+
+    # geoip.dat from v2fly/geoip
+    local geoip_url="https://github.com/v2fly/geoip/releases/latest/download/geoip.dat"
+    download_file "${geoip_url}" "${XRAY_CONFIG_DIR}/geoip.dat" || \
+        log_warn "geoip.dat download failed — geo-routing will be limited"
+
+    # geosite.dat from Loyalsoldier (most complete, Xray-compatible)
+    local geosite_url="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+    if ! download_file "${geosite_url}" "${XRAY_CONFIG_DIR}/geosite.dat" 2>/dev/null; then
+        # Fallback: v2fly domain list (published as dlc.dat)
+        local dlc_url="https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
+        download_file "${dlc_url}" "${XRAY_CONFIG_DIR}/geosite.dat" || \
+            log_warn "geosite.dat download failed — domain routing will be limited"
     fi
 
-    download_file "${base}/geoip.dat" "${XRAY_CONFIG_DIR}/geoip.dat" || true
-    download_file "${base}/geosite.dat" "${XRAY_CONFIG_DIR}/geosite.dat" || true
     log_ok "Xray geodata installed"
 }
 

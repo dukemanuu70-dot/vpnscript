@@ -437,10 +437,10 @@ main() {
     _run_module "xray"      "module_install_xray"
     _register_rollback "_run_module xray module_remove_xray"
 
-    _run_module "wireguard" "module_install_wireguard"
+    _run_module "wireguard" "module_install_wireguard" || true
     _register_rollback "_run_module wireguard module_remove_wireguard"
 
-    _run_module "hysteria2" "module_install_hysteria2"
+    _run_module "hysteria2" "module_install_hysteria2" || true
     _register_rollback "_run_module hysteria2 module_remove_hysteria2"
 
     _run_module "security"  "module_configure_security"

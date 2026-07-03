@@ -45,23 +45,25 @@ module_install_wireguard() {
 
     _write_wireguard_server_config
 
-    # Install systemd override
-    local override_dir="/etc/systemd/system/wg-quick@${WG_INTERFACE}.service.d"
+    # Install systemd override for auto-restart
+    # Note: wg-quick@ is a template unit — override goes in wg-quick@wg0.service.d
+    local override_dir="/etc/systemd/system/wg-quick@wg0.service.d"
     mkdir -p "${override_dir}"
     cat > "${override_dir}/override.conf" <<EOF
 [Service]
-Restart=always
+Restart=on-failure
 RestartSec=5s
 EOF
 
     systemctl daemon-reload
     systemctl enable "wg-quick@${WG_INTERFACE}"
-    systemctl start "wg-quick@${WG_INTERFACE}"
 
-    if systemctl is-active --quiet "wg-quick@${WG_INTERFACE}"; then
+    # Start — but don't hard-fail if it doesn't come up
+    if systemctl start "wg-quick@${WG_INTERFACE}" 2>/dev/null; then
         log_ok "WireGuard running on port ${WG_PORT}"
     else
-        log_warn "WireGuard may not have started. Check: journalctl -u wg-quick@${WG_INTERFACE}"
+        log_warn "WireGuard failed to start. Check: journalctl -u wg-quick@${WG_INTERFACE}"
+        log_warn "It may start correctly after reboot or once kernel modules load."
     fi
 }
 
