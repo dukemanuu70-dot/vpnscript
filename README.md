@@ -93,40 +93,54 @@ This is a comprehensive VPN and SSH server management solution designed for fres
 
 ## 🚀 Quick Install (One-Line Command)
 
-### Auto-Install Script
+### Auto-Install Script (recommended)
+
+Run this on your VPS as root — it clones the repo and installs everything automatically:
+
 ```bash
-wget -qO- https://raw.githubusercontent.com/dukemanuu70-dot/vpnscript/main/vpn-manager/install.sh | sudo bash
+wget -qO- https://raw.githubusercontent.com/dukemanuu70-dot/vpnscript/main/install.sh | sudo bash
 ```
 
 **OR using curl:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dukemanuu70-dot/vpnscript/main/vpn-manager/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dukemanuu70-dot/vpnscript/main/install.sh | sudo bash
 ```
 
-### Manual Installation
+> The one-liner points to `install.sh` at the **repo root** — that script auto-clones the full repo to `/opt/vpn-manager` and launches the real installer.
+
+---
+
+### Manual Installation (alternative)
+
+If you prefer to clone and inspect before running:
+
 ```bash
 # Clone the repository
 git clone https://github.com/dukemanuu70-dot/vpnscript.git
+
+# Enter the vpn-manager folder
 cd vpnscript/vpn-manager
 
 # Run the installer
 sudo bash install.sh
 ```
 
-### Post-Install
-After installation completes:
-```bash
-# Navigate to the installed directory
-cd /root/vpnscript/vpn-manager  # or wherever you cloned it
+### Post-Install: Launch the Menu
 
-# Launch the interactive menu
+```bash
+sudo bash /opt/vpn-manager/vpn-manager/menu.sh
+```
+
+Or if you cloned manually:
+```bash
+cd vpnscript/vpn-manager
 sudo bash menu.sh
 ```
 
-**⚠️ IMPORTANT**: 
+**⚠️ IMPORTANT**:
 - Run on a **fresh VPS only** (existing configurations may conflict)
-- Ensure ports **22, 80, 443** are accessible
-- Root access required
+- Ensure ports **22, 80, 443** are accessible before running
+- Root access is required
 
 ---
 
@@ -311,22 +325,17 @@ menu.sh -> Monitoring
 wget -qO- https://raw.githubusercontent.com/dukemanuu70-dot/vpnscript/main/vpn-manager/update.sh | sudo bash
 ```
 
-### Update System Packages
+### Update from menu (easiest)
 ```bash
-sudo bash update.sh
-# Or via menu: Updates -> Update System Packages
+sudo bash /opt/vpn-manager/vpn-manager/menu.sh
+# Then: Updates → Update System Packages / Update Xray-core / Update Panel
 ```
 
-### Update Xray-core
+### Manual update
 ```bash
-# Via menu: Updates -> Update Xray-core
-```
-
-### Update Panel
-```bash
-cd vpnscript/vpn-manager
+cd /opt/vpn-manager
 git pull origin main
-# Or via menu: Updates -> Update VPN Manager Panel
+sudo bash vpn-manager/update.sh
 ```
 
 ---
