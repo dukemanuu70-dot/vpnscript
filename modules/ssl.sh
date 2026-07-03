@@ -39,6 +39,22 @@ ssl_setup_domain() {
 
     validate_domain "${domain}" || return 1
 
+    # Fix DNS if broken before attempting certbot
+    if ! nslookup "acme-v02.api.letsencrypt.org" &>/dev/null 2>&1; then
+        log_warn "DNS not resolving — attempting fix..."
+        rm -f /etc/resolv.conf
+        printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n' \
+            > /etc/resolv.conf
+        chattr +i /etc/resolv.conf 2>/dev/null || true
+        sleep 2
+        if ! nslookup "acme-v02.api.letsencrypt.org" &>/dev/null 2>&1; then
+            log_error "DNS still failing. Cannot obtain SSL certificate."
+            log_error "Fix DNS first: rm -f /etc/resolv.conf && echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
+            return 1
+        fi
+        log_ok "DNS fixed — proceeding with SSL setup"
+    fi
+
     # Verify DNS
     log_info "Verifying DNS for ${domain}..."
     if ! verify_dns "${domain}" "${SERVER_IPV4:-}"; then

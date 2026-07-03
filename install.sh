@@ -126,8 +126,36 @@ _preflight() {
 }
 
 # ---------------------------------------------------------------------------
-# Create directory structure
+# Fix DNS if systemd-resolved stub is broken
 # ---------------------------------------------------------------------------
+_fix_dns() {
+    # Test if DNS works already
+    if nslookup google.com 8.8.8.8 &>/dev/null 2>&1; then
+        log_ok "DNS: OK"
+        return 0
+    fi
+
+    log_warn "DNS stub resolver not working — fixing /etc/resolv.conf..."
+
+    # Remove broken symlink/file and write direct nameservers
+    rm -f /etc/resolv.conf
+    cat > /etc/resolv.conf <<'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+nameserver 8.8.4.4
+EOF
+    # Protect from being overwritten by systemd-resolved
+    chattr +i /etc/resolv.conf 2>/dev/null || true
+
+    # Test again
+    if nslookup google.com &>/dev/null 2>&1; then
+        log_ok "DNS fixed — using 8.8.8.8 / 1.1.1.1"
+    else
+        log_warn "DNS still not resolving. Check your VPS network configuration."
+    fi
+}
+
+
 _create_dirs() {
     log_section "Creating Directory Structure"
     local dirs=(
@@ -449,6 +477,7 @@ main() {
     echo ""
 
     _preflight
+    _fix_dns
     _create_dirs
     _update_system
     _install_deps

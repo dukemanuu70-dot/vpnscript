@@ -35,12 +35,14 @@ BRAND_MENU_TITLE="${BRAND_MENU_TITLE:-VPN & SSH Management Suite}"
 # Detect OS if not already detected
 [[ -z "${OS_ID:-}" ]] && detect_os 2>/dev/null || true
 
-# Get server IP — try multiple methods
+# Get server IP — try interface first (fast, no DNS needed), then public IP services
 if [[ -z "${SERVER_IPV4:-}" ]]; then
-    SERVER_IPV4="$(curl -4 -s --connect-timeout 5 --max-time 8 https://ipv4.icanhazip.com 2>/dev/null | tr -d '[:space:]' || true)"
+    SERVER_IPV4="$(ip route get 8.8.8.8 2>/dev/null \
+        | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
 fi
 if [[ -z "${SERVER_IPV4:-}" ]]; then
-    SERVER_IPV4="$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}' || true)"
+    SERVER_IPV4="$(curl -4 -s --connect-timeout 4 --max-time 6 \
+        https://ipv4.icanhazip.com 2>/dev/null | tr -d '[:space:]' || true)"
 fi
 SERVER_IPV4="${SERVER_IPV4:-N/A}"
 
@@ -67,6 +69,32 @@ load_module() {
 }
 
 # ---------------------------------------------------------------------------
+# Print service status bar (shown in every menu header)
+# ---------------------------------------------------------------------------
+print_service_bar() {
+    local services=(
+        "ssh:SSH"
+        "dropbear:Dropbear"
+        "nginx:Nginx"
+        "xray:Xray"
+        "wg-quick@wg0:WireGuard"
+        "fail2ban:Fail2Ban"
+    )
+
+    local line="  "
+    for entry in "${services[@]}"; do
+        local svc="${entry%%:*}"
+        local label="${entry##*:}"
+        if systemctl is-active --quiet "${svc}" 2>/dev/null; then
+            line+="${GREEN}●${RESET} ${WHITE}${label}${RESET}  "
+        else
+            line+="${RED}●${RESET} ${GRAY}${label}${RESET}  "
+        fi
+    done
+    echo -e "${line}"
+}
+
+# ---------------------------------------------------------------------------
 # Print main menu header
 # ---------------------------------------------------------------------------
 print_menu_header() {
@@ -75,9 +103,12 @@ print_menu_header() {
     echo "  ╔══════════════════════════════════════════════════════════╗"
     printf "  ║  %-56s  ║\n" "${BRAND_MENU_TITLE}"
     echo "  ╠══════════════════════════════════════════════════════════╣"
-    printf "  ║  %-20s  %-32s ║\n" "IP: ${SERVER_IPV4:-N/A}" "$(date '+%Y-%m-%d %H:%M')"
-    echo "  ╚══════════════════════════════════════════════════════════╝"
+    printf "  ║  %-20s  %-33s║\n" "IP: ${SERVER_IPV4:-N/A}" "$(date '+%Y-%m-%d %H:%M')"
+    echo "  ╠══════════════════════════════════════════════════════════╣"
     echo -e "${RESET}"
+    print_service_bar
+    echo -e "${CYAN}  ╚══════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
 }
 
 # ===========================================================================
@@ -189,11 +220,13 @@ menu_ssh() {
         case "${choice}" in
             1)
                 echo ""
-                local u days ml
+                local u days ml pass
                 u="$(prompt_required "Username")"
+                read -rsp "$(echo -e "  ${CYAN}Password (leave blank to auto-generate): ${RESET}")" pass
+                echo ""
                 days="$(prompt_with_default "Days until expiry" "30")"
                 ml="$(prompt_with_default "Max simultaneous logins" "2")"
-                ssh_create_user "${u}" "" "${days}" "${ml}"
+                ssh_create_user "${u}" "${pass}" "${days}" "${ml}"
                 press_enter
                 ;;
             2)
@@ -489,8 +522,7 @@ menu_security() {
         print_menu_item "4" "BBR Status"
         print_menu_item "5" "Open Port in Firewall"
         print_menu_item "6" "Close Port in Firewall"
-        print_menu_item "7" "List Banned IPs"
-        print_menu_item "8" "Unban IP"
+        print_menu_item "7" "Unban All IPs"
         print_menu_item "0" "Back"
         echo ""
 
@@ -517,12 +549,10 @@ menu_security() {
                 security_close_port "${p}" "${proto}"
                 press_enter
                 ;;
-            7) security_list_banned; press_enter ;;
-            8)
-                echo ""
-                local ip
-                ip="$(prompt_required "IP to unban")"
-                security_unban_ip "${ip}"
+            7)
+                fail2ban-client unban --all 2>/dev/null && \
+                    log_ok "All IPs unbanned" || \
+                    log_warn "Nothing to unban"
                 press_enter
                 ;;
             0) break ;;

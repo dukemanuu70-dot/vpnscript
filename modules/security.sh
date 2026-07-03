@@ -45,7 +45,11 @@ _configure_ufw() {
 
     # Core ports
     ufw allow "${SSHD_PORT:-22}/tcp"    comment "OpenSSH"
-    ufw allow "${DROPBEAR_PORT:-444}/tcp" comment "Dropbear"
+    ufw allow 444/tcp                   comment "Dropbear"
+    ufw allow 8080/tcp                  comment "Dropbear HTTP-alt"
+    ufw allow 8880/tcp                  comment "Dropbear HTTP-alt2"
+    ufw allow 2052/tcp                  comment "Dropbear CF-compat"
+    ufw allow 2095/tcp                  comment "Dropbear CF-compat"
     ufw allow 80/tcp                    comment "HTTP"
     ufw allow 443/tcp                   comment "HTTPS"
     ufw allow 443/udp                   comment "HTTPS-UDP/QUIC"
@@ -80,58 +84,30 @@ security_close_port() {
 }
 
 # ---------------------------------------------------------------------------
-# Fail2Ban configuration
+# Fail2Ban — monitoring only, no IP banning
 # ---------------------------------------------------------------------------
 _configure_fail2ban() {
-    log_info "Configuring Fail2Ban..."
+    log_info "Configuring Fail2Ban (monitor only — no banning)..."
 
-    # Write jail.local
     cat > "${FAIL2BAN_JAIL_LOCAL}" <<EOF
 # Fail2Ban Configuration - Managed by VPN Manager
+# Banning is DISABLED — monitoring only
 [DEFAULT]
-bantime   = 3600
-findtime  = 600
-maxretry  = 5
-backend   = systemd
-banaction = ufw
+bantime   = 0
+maxretry  = 99999
+findtime  = 99999
+ignoreip  = 0.0.0.0/0
 
 [sshd]
-enabled  = true
-port     = ${SSHD_PORT:-22},${DROPBEAR_PORT:-444}
-maxretry = 4
-bantime  = 7200
-logpath  = %(sshd_log)s
-backend  = %(sshd_backend)s
+enabled = false
 
 [nginx-http-auth]
-enabled  = true
-port     = http,https
-logpath  = /var/log/nginx/error.log
-maxretry = 5
+enabled = false
 
 [nginx-limit-req]
-enabled  = true
-port     = http,https
-logpath  = /var/log/nginx/error.log
-maxretry = 10
-
-[vpn-manager]
-enabled  = true
-port     = ${SSHD_PORT:-22},${DROPBEAR_PORT:-444}
-filter   = vpn-manager
-logpath  = /var/log/vpn-manager/activity.log
-maxretry = 10
-bantime  = 3600
+enabled = false
 EOF
 
-    # Write custom filter
-    cat > "${FAIL2BAN_VPN_FILTER}" <<'EOF'
-[Definition]
-failregex = .*\[<HOST>\].*(FAILED|failed|error|ERROR).*
-ignoreregex =
-EOF
-
-    # Systemd override
     local f2b_override="/etc/systemd/system/fail2ban.service.d"
     mkdir -p "${f2b_override}"
     cat > "${f2b_override}/override.conf" <<EOF
@@ -144,11 +120,7 @@ EOF
     systemctl enable fail2ban
     systemctl restart fail2ban
 
-    if systemctl is-active --quiet fail2ban; then
-        log_ok "Fail2Ban configured and running"
-    else
-        log_warn "Fail2Ban may not have started. Check: journalctl -u fail2ban"
-    fi
+    log_ok "Fail2Ban running (monitoring only, no bans)"
 }
 
 # ---------------------------------------------------------------------------
