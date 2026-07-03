@@ -396,14 +396,15 @@ ssh_show_expiry() {
     local today_ts
     today_ts="$(date +%s)"
 
-    for conf in "${SSH_USERS_DB}"/*.conf 2>/dev/null; do
+    for conf in "${SSH_USERS_DB}"/*.conf; do
         [[ -f "${conf}" ]] || continue
         local username expiry status
         username="$(get_config_value "${conf}" "USERNAME")"
         expiry="$(get_config_value "${conf}" "EXPIRY")"
         status="$(get_config_value "${conf}" "STATUS")"
 
-        local days_left="N/A"
+        local days_left
+        days_left="N/A"
         local color="${WHITE}"
 
         if [[ "${expiry}" != "never" && -n "${expiry}" ]]; then
@@ -486,7 +487,7 @@ ssh_check_expiry() {
     local today
     today="$(date +%Y-%m-%d)"
 
-    for conf in "${SSH_USERS_DB}"/*.conf 2>/dev/null; do
+    for conf in "${SSH_USERS_DB}"/*.conf; do
         [[ -f "${conf}" ]] || continue
         local username expiry status
         username="$(get_config_value "${conf}" "USERNAME")"
@@ -516,7 +517,7 @@ ssh_list_users() {
     printf "  ${CYAN}%-20s %-12s %-15s %-10s${RESET}\n" "Username" "Status" "Expires" "Type"
     print_separator "-" 65 "${GRAY}"
 
-    for conf in "${SSH_USERS_DB}"/*.conf 2>/dev/null; do
+    for conf in "${SSH_USERS_DB}"/*.conf; do
         [[ -f "${conf}" ]] || continue
         local username type expiry status
         username="$(get_config_value "${conf}" "USERNAME")"

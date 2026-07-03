@@ -170,7 +170,7 @@ xray_rebuild_config() {
     local trojan_users=()
     local ss_users=()
 
-    for conf in "${XRAY_USERS_DB}"/*.conf 2>/dev/null; do
+    for conf in "${XRAY_USERS_DB}"/*.conf; do
         [[ -f "${conf}" ]] || continue
         local type uuid password domain
         type="$(get_config_value "${conf}" "TYPE")"
@@ -615,7 +615,7 @@ xray_list_users() {
     printf "  ${CYAN}%-20s %-15s %-15s %-10s${RESET}\n" "Username" "Protocol" "Expires" "Status"
     print_separator "-" 65 "${GRAY}"
 
-    for conf in "${XRAY_USERS_DB}"/*_*.conf 2>/dev/null; do
+    for conf in "${XRAY_USERS_DB}"/*_*.conf; do
         [[ -f "${conf}" ]] || continue
         local username type expiry status
         username="$(get_config_value "${conf}" "USERNAME")"
