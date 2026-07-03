@@ -156,7 +156,11 @@ ssh_create_user() {
     validate_username "${username}" || return 1
 
     if user_exists "${username}"; then
-        log_error "User already exists: ${username}"
+        if is_vpn_user "${username}"; then
+            log_warn "VPN user '${username}' already exists. Use Extend or Reset Password instead."
+        else
+            log_error "System user '${username}' already exists. Choose a different username."
+        fi
         return 1
     fi
 

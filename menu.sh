@@ -34,7 +34,15 @@ BRAND_MENU_TITLE="${BRAND_MENU_TITLE:-VPN & SSH Management Suite}"
 
 # Detect OS if not already detected
 [[ -z "${OS_ID:-}" ]] && detect_os 2>/dev/null || true
-[[ -z "${SERVER_IPV4:-}" ]] && SERVER_IPV4="$(curl -4 -s --max-time 5 https://ipv4.icanhazip.com 2>/dev/null || echo '')"
+
+# Get server IP — try multiple methods
+if [[ -z "${SERVER_IPV4:-}" ]]; then
+    SERVER_IPV4="$(curl -4 -s --connect-timeout 5 --max-time 8 https://ipv4.icanhazip.com 2>/dev/null | tr -d '[:space:]' || true)"
+fi
+if [[ -z "${SERVER_IPV4:-}" ]]; then
+    SERVER_IPV4="$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}' || true)"
+fi
+SERVER_IPV4="${SERVER_IPV4:-N/A}"
 
 # Root check
 if [[ "${EUID}" -ne 0 ]]; then
@@ -433,11 +441,12 @@ menu_ssl() {
         read -rp "$(echo -e "  ${CYAN}Select option: ${RESET}")" choice
 
         case "${choice}" in
-            1)
+    1)
                 echo ""
-                local d
-                d="$(prompt_required "Domain")"
-                ssl_setup_domain "${d}"
+                local d email
+                d="$(prompt_required "Enter your domain (e.g. vpn.example.com)")"
+                email="$(prompt_with_default "Email for SSL notifications" "admin@${d}")"
+                ssl_setup_domain "${d}" "${email}"
                 press_enter
                 ;;
             2)

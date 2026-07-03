@@ -355,6 +355,34 @@ _run_module() {
 }
 
 # ---------------------------------------------------------------------------
+# Install 'menu' command and auto-launch on SSH login
+# ---------------------------------------------------------------------------
+_install_menu_command() {
+    log_section "Installing Menu Command"
+
+    # Create global 'menu' command
+    cat > /usr/local/bin/menu <<EOF
+#!/usr/bin/env bash
+exec bash ${SCRIPT_DIR}/menu.sh
+EOF
+    chmod +x /usr/local/bin/menu
+    log_ok "Command installed: 'menu'"
+
+    # Auto-launch on SSH login for root
+    local bashrc="/root/.bashrc"
+    if ! grep -q "vpn-manager menu" "${bashrc}" 2>/dev/null; then
+        cat >> "${bashrc}" <<'BASHRC'
+
+# VPN Manager — auto-launch menu on SSH login
+if [[ -n "${SSH_CONNECTION:-}" ]] && [[ $- == *i* ]] && [[ "${TERM:-}" != "dumb" ]]; then
+    exec /usr/local/bin/menu
+fi
+BASHRC
+        log_ok "Auto-launch on SSH login configured"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Post-install verification
 # ---------------------------------------------------------------------------
 _verify() {
@@ -451,6 +479,7 @@ main() {
     _run_module "backup"    "module_configure_backup"
 
     _verify
+    _install_menu_command
     _print_summary
 }
 
