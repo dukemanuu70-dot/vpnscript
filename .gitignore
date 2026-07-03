@@ -1,0 +1,58 @@
+# VPN Manager .gitignore
+
+# Logs
+logs/*.log
+*.log
+/var/log/vpn-manager/
+
+# Backups
+backup/*.tar.gz
+backup/*.bak
+/var/lib/vpn-manager/backups/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Secrets and sensitive data
+*.key
+*.pem
+*.crt
+*.conf.local
+.env
+secrets/
+
+# User database (contains sensitive info)
+users/*.conf
+
+# OS generated
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Editor directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Test and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Documentation builds
+docs/_build/
+site/
