@@ -66,10 +66,23 @@ ssl_setup_domain() {
     mkdir -p "${CERTBOT_WEBROOT}"
     mkdir -p "${CERTBOT_HOOKS_DIR}/post"
 
+    # Ensure certbot is installed (may have been skipped if package name changed)
+    if ! command -v certbot &>/dev/null; then
+        log_info "Certbot not found. Installing via snap (fallback)..."
+        if command -v snap &>/dev/null; then
+            snap install --classic certbot 2>/dev/null && \
+                ln -sf /snap/bin/certbot /usr/local/bin/certbot 2>/dev/null || true
+        fi
+        if ! command -v certbot &>/dev/null; then
+            log_error "Cannot install certbot. Please install manually and re-run SSL setup."
+            return 1
+        fi
+    fi
+
     # Try webroot method first (nginx must be running and serving /.well-known)
     local cert_obtained=0
 
-    # Configure nginx for webroot validation
+    # Prepare nginx for ACME challenge
     _nginx_prepare_webroot "${domain}"
 
     if certbot certonly \

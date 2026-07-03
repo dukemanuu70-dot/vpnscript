@@ -25,46 +25,35 @@ module_configure_security() {
 }
 
 # ---------------------------------------------------------------------------
-# UFW Firewall
+# UFW Firewall — works identically on all supported releases
 # ---------------------------------------------------------------------------
 _configure_ufw() {
     log_info "Configuring UFW firewall..."
+
+    # UFW is available on all Ubuntu and Debian 11+ releases
+    if ! command -v ufw &>/dev/null; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ufw 2>/dev/null || {
+            log_warn "UFW not available. Skipping firewall setup."
+            return 0
+        }
+    fi
 
     # Default policies
     ufw --force reset 2>/dev/null || true
     ufw default deny incoming
     ufw default allow outgoing
 
-    # Allow SSH (OpenSSH)
-    local ssh_port="${SSHD_PORT:-22}"
-    ufw allow "${ssh_port}/tcp" comment "OpenSSH"
+    # Core ports
+    ufw allow "${SSHD_PORT:-22}/tcp"    comment "OpenSSH"
+    ufw allow "${DROPBEAR_PORT:-444}/tcp" comment "Dropbear"
+    ufw allow 80/tcp                    comment "HTTP"
+    ufw allow 443/tcp                   comment "HTTPS"
+    ufw allow 443/udp                   comment "HTTPS-UDP/QUIC"
+    ufw allow "${WG_PORT:-51820}/udp"   comment "WireGuard"
+    ufw allow "${HY2_PORT:-8443}/udp"   comment "Hysteria2"
 
-    # Allow Dropbear
-    local dropbear_port="${DROPBEAR_PORT:-444}"
-    ufw allow "${dropbear_port}/tcp" comment "Dropbear"
-
-    # Allow HTTP/HTTPS
-    ufw allow 80/tcp comment "HTTP"
-    ufw allow 443/tcp comment "HTTPS"
-    ufw allow 443/udp comment "HTTPS UDP (QUIC)"
-
-    # Allow WireGuard
-    local wg_port="${WG_PORT:-51820}"
-    ufw allow "${wg_port}/udp" comment "WireGuard"
-
-    # Allow Hysteria2
-    local hy2_port="${HY2_PORT:-8443}"
-    ufw allow "${hy2_port}/udp" comment "Hysteria2"
-
-    # Allow VMess WS port (internal, proxied via Nginx)
-    # These are local-only, not opened in firewall
-
-    # Enable UFW
     ufw --force enable
     log_ok "UFW firewall configured and enabled"
-
-    # Write UFW rules summary
-    ufw status verbose 2>&1 | tee -a "${LOG_FILE:-/dev/null}" || true
 }
 
 # ---------------------------------------------------------------------------
@@ -228,25 +217,51 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Automatic security updates
+# Automatic security updates — handles all Ubuntu/Debian releases
 # ---------------------------------------------------------------------------
 _configure_auto_updates() {
     log_info "Configuring automatic security updates..."
 
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades apt-listchanges 2>/dev/null || true
+    # Package name is consistent across all supported releases
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        unattended-upgrades 2>/dev/null || {
+        log_warn "unattended-upgrades not available. Skipping."
+        return 0
+    }
 
-    local auto_upgrades_file="/etc/apt/apt.conf.d/20auto-upgrades"
-    cat > "${auto_upgrades_file}" <<'EOF'
+    # Enable auto-upgrades
+    cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Download-Upgradeable-Packages "1";
 EOF
 
+    # Configure unattended-upgrades for security only
     local unattended_file="/etc/apt/apt.conf.d/50unattended-upgrades"
-    if [[ -f "${unattended_file}" ]]; then
-        # Enable security updates
-        sed -i 's|//.*"${distro_id}:${distro_codename}-security";|"${distro_id}:${distro_codename}-security";|g' \
+    if [[ ! -f "${unattended_file}" ]]; then
+        cat > "${unattended_file}" <<EOF
+Unattended-Upgrade::Allowed-Origins {
+    "\${distro_id}:\${distro_codename}-security";
+    "\${distro_id}ESMApps:\${distro_codename}-apps-security";
+    "\${distro_id}ESM:\${distro_codename}-infra-security";
+};
+Unattended-Upgrade::Package-Blacklist {};
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+    else
+        # Enable security line if commented out
+        sed -i 's|^//\s*"\${distro_id}:\${distro_codename}-security";|"\${distro_id}:\${distro_codename}-security";|g' \
             "${unattended_file}" 2>/dev/null || true
+    fi
+
+    # Enable and start the service (systemd timer on newer systems)
+    if systemctl list-unit-files | grep -q "apt-daily-upgrade.timer"; then
+        systemctl enable apt-daily-upgrade.timer 2>/dev/null || true
+        systemctl start apt-daily-upgrade.timer 2>/dev/null || true
     fi
 
     log_ok "Automatic security updates configured"

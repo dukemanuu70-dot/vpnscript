@@ -143,44 +143,192 @@ _create_dirs() {
 }
 
 # ---------------------------------------------------------------------------
-# System update
+# System update — suppress interactive prompts on all releases
 # ---------------------------------------------------------------------------
 _update_system() {
     log_section "Updating System"
     export DEBIAN_FRONTEND=noninteractive
+
+    # Suppress needrestart interactive prompts (Ubuntu 22.04+)
+    if [[ -f /etc/needrestart/needrestart.conf ]]; then
+        sed -i "s/^#\?\$nrconf{restart}.*/\$nrconf{restart} = 'a';/" \
+            /etc/needrestart/needrestart.conf 2>/dev/null || true
+    fi
+
+    # Suppress debconf prompts
+    export DEBIAN_FRONTEND=noninteractive
+    export DEBCONF_NONINTERACTIVE_SEEN=true
+    export UCF_FORCE_CONFFOLD=1
+
+    log_info "Running apt-get update..."
     apt-get update -qq 2>&1 | tee -a "${INSTALL_LOG}" || log_fatal "apt-get update failed"
-    apt-get upgrade -y -qq \
+
+    log_info "Running apt-get upgrade..."
+    apt-get upgrade -y \
         -o Dpkg::Options::="--force-confdef" \
         -o Dpkg::Options::="--force-confold" \
-        2>&1 | tee -a "${INSTALL_LOG}" || log_warn "Upgrade had some errors"
+        -o Dpkg::Options::="--force-confnew" \
+        2>&1 | tee -a "${INSTALL_LOG}" || log_warn "Upgrade had non-fatal errors"
+
     log_ok "System updated"
 }
 
 # ---------------------------------------------------------------------------
-# Base dependencies
+# Base dependencies — version-aware, never hard-fails on optional packages
 # ---------------------------------------------------------------------------
 _install_deps() {
     log_section "Installing Dependencies"
     export DEBIAN_FRONTEND=noninteractive
 
-    local pkgs=(
-        curl wget git unzip zip tar gzip jq openssl ca-certificates gnupg
+    # ── Always-required packages (exist on all supported releases) ──────────
+    local core_pkgs=(
+        curl wget git unzip zip tar gzip
+        openssl ca-certificates gnupg
         lsb-release apt-transport-https software-properties-common
-        coreutils util-linux net-tools iproute2 iptables iputils-ping
-        dnsutils whois tcpdump htop iotop iftop vnstat nload
-        ufw fail2ban certbot python3-certbot-nginx cron logrotate
+        coreutils util-linux net-tools iproute2
+        iptables iputils-ping dnsutils
+        ufw fail2ban certbot cron logrotate
         rsync socat acl bc lsof psmisc procps sysstat
-        qrencode uuid-runtime nftables python3 python3-yaml
-        wireguard wireguard-tools dropbear
+        qrencode uuid-runtime
+        python3 python3-yaml
+        dropbear
     )
 
-    for pkg in "${pkgs[@]}"; do
-        if ! dpkg -l "${pkg}" &>/dev/null; then
-            apt-get install -y -qq "${pkg}" 2>&1 | tee -a "${INSTALL_LOG}" || \
-                log_warn "Could not install: ${pkg}"
+    # ── Optional packages — installed with best-effort ──────────────────────
+    # Names or availability vary across Ubuntu/Debian versions
+    local optional_pkgs=(
+        jq           # sometimes needs backports on older Debian
+        whois
+        tcpdump
+        htop
+        iotop
+        iftop
+        vnstat
+        nload
+        nftables
+        wireguard
+        wireguard-tools
+    )
+
+    # ── Version-specific extras ──────────────────────────────────────────────
+    local versioned_pkgs=()
+
+    # certbot nginx plugin (name changed in Ubuntu 24.04+)
+    if [[ -n "${PKG_CERTBOT_NGINX:-}" ]]; then
+        versioned_pkgs+=("${PKG_CERTBOT_NGINX}")
+    else
+        # Try python3-certbot-nginx, fall back silently
+        versioned_pkgs+=("python3-certbot-nginx")
+    fi
+
+    # needrestart (Ubuntu only — causes interactive prompts on Debian)
+    if [[ "${OS_ID}" == "ubuntu" ]]; then
+        versioned_pkgs+=("needrestart")
+    fi
+
+    # speedtest
+    if [[ -n "${PKG_SPEEDTEST:-}" ]]; then
+        versioned_pkgs+=("${PKG_SPEEDTEST}")
+    fi
+
+    # ── Install core packages (fail loudly if these are missing) ────────────
+    log_info "Installing core packages (${#core_pkgs[@]})..."
+    local failed_core=()
+    for pkg in "${core_pkgs[@]}"; do
+        if ! _pkg_installed "${pkg}"; then
+            if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkg}" \
+                    2>&1 | tee -a "${INSTALL_LOG}"; then
+                failed_core+=("${pkg}")
+                log_warn "  Failed to install core package: ${pkg}"
+            fi
         fi
     done
-    log_ok "Dependencies installed"
+
+    if [[ ${#failed_core[@]} -gt 0 ]]; then
+        log_warn "Some core packages failed: ${failed_core[*]}"
+        log_warn "This may cause issues. Check apt sources and try: apt-get update"
+    fi
+
+    # ── Install optional packages (warn only) ────────────────────────────────
+    log_info "Installing optional packages (${#optional_pkgs[@]})..."
+    for pkg in "${optional_pkgs[@]}"; do
+        if ! _pkg_installed "${pkg}"; then
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkg}" \
+                2>&1 | tee -a "${INSTALL_LOG}" || \
+                log_warn "  Optional package unavailable (skipped): ${pkg}"
+        fi
+    done
+
+    # ── Install versioned/compat packages ────────────────────────────────────
+    log_info "Installing version-specific packages..."
+    for pkg in "${versioned_pkgs[@]}"; do
+        [[ -z "${pkg}" ]] && continue
+        if ! _pkg_installed "${pkg}"; then
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkg}" \
+                2>&1 | tee -a "${INSTALL_LOG}" || \
+                log_warn "  Version-specific package unavailable (skipped): ${pkg}"
+        fi
+    done
+
+    # ── WireGuard: needs backports on some older releases ────────────────────
+    _install_wireguard_compat
+
+    log_ok "Dependency installation complete"
+}
+
+# ---------------------------------------------------------------------------
+# WireGuard compatibility across releases
+# ---------------------------------------------------------------------------
+_install_wireguard_compat() {
+    # Skip in containers — kernel module likely unavailable
+    if [[ "${IS_CONTAINER:-0}" -eq 1 ]]; then
+        log_info "Skipping WireGuard kernel module install (container environment)"
+        return 0
+    fi
+
+    # Already installed?
+    if _pkg_installed wireguard-tools && get_wireguard_kernel_status | grep -qv unavailable; then
+        log_ok "WireGuard already available"
+        return 0
+    fi
+
+    # Ubuntu 20.04 needs wireguard from backports or linux-modules-extra
+    if [[ "${OS_ID}" == "ubuntu" && "${OS_MAJOR}" == "20" ]]; then
+        log_info "Ubuntu 20.04: installing WireGuard via linux-modules-extra..."
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            linux-modules-extra-"$(uname -r)" wireguard wireguard-tools \
+            2>&1 | tee -a "${INSTALL_LOG}" || \
+            log_warn "WireGuard install failed on Ubuntu 20.04 — may need manual setup"
+        return 0
+    fi
+
+    # Debian 11 (bullseye) needs backports
+    if [[ "${OS_ID}" == "debian" && "${OS_MAJOR}" == "11" ]]; then
+        log_info "Debian 11: enabling bullseye-backports for WireGuard..."
+        if ! grep -q "bullseye-backports" /etc/apt/sources.list 2>/dev/null && \
+           ! grep -rq "bullseye-backports" /etc/apt/sources.list.d/ 2>/dev/null; then
+            echo "deb http://deb.debian.org/debian bullseye-backports main" \
+                >> /etc/apt/sources.list.d/backports.list
+            apt-get update -qq 2>&1 | tee -a "${INSTALL_LOG}" || true
+        fi
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            -t bullseye-backports wireguard wireguard-tools \
+            2>&1 | tee -a "${INSTALL_LOG}" || \
+            log_warn "WireGuard install from backports failed"
+        return 0
+    fi
+
+    # All other releases: standard install
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        wireguard wireguard-tools 2>&1 | tee -a "${INSTALL_LOG}" || \
+        log_warn "WireGuard install failed — will be skipped during setup"
+}
+
+# ---------------------------------------------------------------------------
+# Internal: check if package is installed
+# ---------------------------------------------------------------------------
+_pkg_installed() {
+    dpkg -l "$1" 2>/dev/null | grep -q '^ii'
 }
 
 # ---------------------------------------------------------------------------

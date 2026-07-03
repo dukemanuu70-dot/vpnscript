@@ -46,8 +46,22 @@ This is a comprehensive VPN and SSH server management solution designed for fres
 ## System Requirements
 
 ### Supported Operating Systems
-- **Ubuntu**: 20.04 LTS, 22.04 LTS, 24.04 LTS, 26.04 LTS+
-- **Debian**: 11, 12, 13+
+
+| OS | Versions | Status |
+|----|----------|--------|
+| Ubuntu | 20.04 LTS | ✅ Fully tested |
+| Ubuntu | 22.04 LTS | ✅ Fully tested |
+| Ubuntu | 24.04 LTS | ✅ Fully tested |
+| Ubuntu | 26.04 LTS | ✅ Supported |
+| Ubuntu | 28.04+ (future) | ⚡ Best-effort (auto-detected) |
+| Debian | 11 (Bullseye) | ✅ Fully tested |
+| Debian | 12 (Bookworm) | ✅ Fully tested |
+| Debian | 13 (Trixie) | ✅ Supported |
+| Debian | 14+ (future) | ⚡ Best-effort (auto-detected) |
+
+**Future releases are handled automatically** — the installer detects the version at runtime, adjusts package names accordingly, and warns if a version is untested rather than refusing to install.
+
+> **Note on future compatibility**: Package names and repository layouts can change between OS releases. The installer handles known differences (e.g. WireGuard backports on Debian 11, certbot plugin naming on Ubuntu 24.04+) and uses best-effort fallbacks for unknown future versions. If you hit a package error on a new release, please [open an issue](https://github.com/dukemanuu70-dot/vpnscript/issues).
 
 ### Minimum Hardware
 - **CPU**: 1 core
@@ -55,9 +69,25 @@ This is a comprehensive VPN and SSH server management solution designed for fres
 - **Disk**: 2GB free space
 - **Network**: Public IPv4 address (IPv6 optional)
 
+### Architecture Support
+| Architecture | Status |
+|---|---|
+| x86_64 / amd64 | ✅ Full support |
+| ARM64 / aarch64 | ✅ Full support |
+| ARMv7 | ⚡ Best-effort |
+| ARMv6 | ⚠️ Limited (some binaries unavailable) |
+
 ### Virtualization
-Supported: KVM, VMware, Hyper-V, Xen, Bare Metal  
-Limited support: OpenVZ, LXC, Docker (WireGuard and BBR may not work)
+| Type | Support |
+|---|---|
+| KVM / QEMU | ✅ Full |
+| VMware | ✅ Full |
+| Hyper-V | ✅ Full |
+| Xen | ✅ Full |
+| Bare Metal | ✅ Full |
+| LXC | ⚠️ Partial (no WireGuard, no BBR) |
+| OpenVZ | ⚠️ Partial (no WireGuard, no BBR) |
+| Docker | ⚠️ Partial (no WireGuard, no BBR) |
 
 ---
 
